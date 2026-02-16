@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Анонимный чат</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --dark: #2c3e50;
+            --light: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .chat-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .user-badge {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .online-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .online-dot {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--light);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message {
+            max-width: 70%;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.own {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.other {
+            background: white;
+            color: var(--dark);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 0.75rem;
+        }
+
+        .message.own .message-header {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .message.other .message-header {
+            color: #666;
+        }
+
+        .sender-name {
+            font-weight: 600;
+        }
+
+        .timestamp {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        .message-text {
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #666;
+            font-size: 0.8rem;
+            margin: 10px 0;
+            font-style: italic;
+            background: rgba(0,0,0,0.05);
+            padding: 5px 15px;
+            border-radius: 20px;
+            align-self: center;
+        }
+
+        .typing-indicator {
+            color: #666;
+            font-size: 0.8rem;
+            font-style: italic;
+            padding: 5px 15px;
+            min-height: 30px;
+        }
+
+        .input-area {
+            background: white;
+            padding: 15px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        #messageInput:focus {
+            border-color: var(--primary);
+        }
+
+        #sendButton {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #sendButton:active {
+            transform: scale(0.95);
+        }
+
+        #sendButton:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            background: #ffd700;
+            color: #333;
+            text-align: center;
+            padding: 5px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .message {
+                max-width: 85%;
+            }
+            .chat-container {
+                height: 95vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-top">
+                <span class="chat-title">🤫 Анонимный чат</span>
+                <span class="user-badge" id="userBadge">Вы: ?</span>
+            </div>
+            <div class="online-info">
+                <span><span class="online-dot"></span> Онлайн: <span id="onlineCount">0</span></span>
+            </div>
+        </div>
+
+        <div id="connectionStatus" class="connection-status">
+            ⚠️ Потеря соединения. Переподключение...
+        </div>
+
+        <div id="messages" class="messages-area"></div>
+        
+        <div id="typingIndicator" class="typing-indicator"></div>
+        
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off" maxlength="500">
+            <button id="sendButton">➤</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        (function() {
+            // Токен устройства
+            function getDeviceToken() {
+                let token = localStorage.getItem('anonChatId');
+                if (!token) {
+                    token = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2);
+                    localStorage.setItem('anonChatId', token);
+                }
+                return token;
+            }
+
+            const deviceToken = getDeviceToken();
+            
+            // Подключение к серверу
+            const socket = io({
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000
+            });
+
+            // Элементы
+            const messagesEl = document.getElementById('messages');
+            const userBadge = document.getElementById('userBadge');
+            const onlineCount = document.getElementById('onlineCount');
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const connectionStatus = document.getElementById('connectionStatus');
+            const typingIndicator = document.getElementById('typingIndicator');
+
+            let myNumber = null;
+            let typingTimer;
+
+            // Экранирование HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Добавить сообщение
+            function addMessage(msg, isOwn) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+                messageDiv.innerHTML = `
+                    <div class="message-header">
+                        <span class="sender-name">Аноним ${msg.anonymousNumber}</span>
+                        <span class="timestamp">${msg.timestamp}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(msg.text)}</div>
+                `;
+                messagesEl.appendChild(messageDiv);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            // Добавить системное сообщение
+            function addSystemMessage(text) {
+                const systemDiv = document.createElement('div');
+                systemDiv.className = 'system-message';
+                systemDiv.textContent = text;
+                messagesEl.appendChild(systemDiv);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            // --- Socket события ---
+            socket.on('connect', () => {
+                connectionStatus.style.display = 'none';
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                socket.emit('register', deviceToken);
+            });
+
+            socket.on('disconnect', () => {
+                connectionStatus.style.display = 'block';
+                sendButton.disabled = true;
+                messageInput.disabled = true;
+            });
+
+            socket.on('init', (data) => {
+                myNumber = data.anonymousNumber;
+                userBadge.textContent = `Вы: Аноним ${myNumber}`;
+                
+                messagesEl.innerHTML = '';
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(msg => {
+                        addMessage(msg, msg.anonymousNumber === myNumber);
+                    });
+                } else {
+                    addSystemMessage('Добро пожаловать! Напишите первое сообщение.');
+                }
+            });
+
+            socket.on('chat message', (msg) => {
+                addMessage(msg, msg.anonymousNumber === myNumber);
+            });
+
+            socket.on('system message', (msg) => {
+                addSystemMessage(msg.text);
+            });
+
+            socket.on('users online', (users) => {
+                onlineCount.textContent = users.length;
+            });
+
+            socket.on('user typing', (data) => {
+                if (data.anonymousNumber !== myNumber) {
+                    typingIndicator.textContent = data.isTyping ? 
+                        `Аноним ${data.anonymousNumber} печатает...` : '';
+                }
+            });
+
+            // Отправка сообщения
+            function sendMessage() {
+                const text = messageInput.value.trim();
+                if (text && socket.connected) {
+                    socket.emit('chat message', { text });
+                    messageInput.value = '';
+                    socket.emit('typing', false);
+                }
+            }
+
+            sendButton.addEventListener('click', sendMessage);
+            
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Индикатор печатания
+            messageInput.addEventListener('input', () => {
+                if (socket.connected) {
+                    socket.emit('typing', messageInput.value.length > 0);
+                    
+                    clearTimeout(typingTimer);
+                    typingTimer = setTimeout(() => {
+                        socket.emit('typing', false);
+                    }, 1000);
+                }
+            });
+
+            messageInput.focus();
+        })();
+    </script>
+</body>
+</html>
