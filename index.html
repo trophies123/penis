@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Анонимный чат</title>
+    <!-- Подключаем Socket.IO через CDN (надёжный способ) -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -51,6 +53,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .chat-title {
@@ -82,6 +86,13 @@
             border-radius: 50%;
             display: inline-block;
             margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
 
         .messages-area {
@@ -150,6 +161,7 @@
         .message-text {
             font-size: 0.95rem;
             line-height: 1.4;
+            word-break: break-word;
         }
 
         .system-message {
@@ -170,6 +182,7 @@
             font-style: italic;
             padding: 5px 15px;
             min-height: 30px;
+            background: white;
         }
 
         .input-area {
@@ -194,6 +207,11 @@
             border-color: var(--primary);
         }
 
+        #messageInput:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
         #sendButton {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
@@ -203,7 +221,11 @@
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        #sendButton:hover {
+            opacity: 0.9;
         }
 
         #sendButton:active {
@@ -213,15 +235,23 @@
         #sendButton:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
         }
 
         .connection-status {
             background: #ffd700;
             color: #333;
             text-align: center;
-            padding: 5px;
+            padding: 8px;
             font-size: 0.9rem;
+            font-weight: 500;
             display: none;
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
         }
 
         @media (max-width: 480px) {
@@ -231,6 +261,9 @@
             .chat-container {
                 height: 95vh;
             }
+            #sendButton {
+                padding: 12px 20px;
+            }
         }
     </style>
 </head>
@@ -239,7 +272,7 @@
         <div class="chat-header">
             <div class="header-top">
                 <span class="chat-title">🤫 Анонимный чат</span>
-                <span class="user-badge" id="userBadge">Вы: ?</span>
+                <span class="user-badge" id="userBadge">Загрузка...</span>
             </div>
             <div class="online-info">
                 <span><span class="online-dot"></span> Онлайн: <span id="onlineCount">0</span></span>
@@ -250,7 +283,9 @@
             ⚠️ Потеря соединения. Переподключение...
         </div>
 
-        <div id="messages" class="messages-area"></div>
+        <div id="messages" class="messages-area">
+            <div class="system-message">Подключение к серверу...</div>
+        </div>
         
         <div id="typingIndicator" class="typing-indicator"></div>
         
@@ -260,17 +295,27 @@
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
         (function() {
+            // Проверка загрузки Socket.IO
+            if (typeof io === 'undefined') {
+                document.getElementById('messages').innerHTML = '<div class="system-message" style="color: red;">❌ Ошибка: не удалось загрузить Socket.IO. Проверьте подключение к интернету.</div>';
+                return;
+            }
+
             // Токен устройства
             function getDeviceToken() {
-                let token = localStorage.getItem('anonChatId');
-                if (!token) {
-                    token = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2);
-                    localStorage.setItem('anonChatId', token);
+                try {
+                    let token = localStorage.getItem('anonChatId');
+                    if (!token) {
+                        token = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+                        localStorage.setItem('anonChatId', token);
+                    }
+                    return token;
+                } catch (e) {
+                    // Если localStorage недоступен
+                    return 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
                 }
-                return token;
             }
 
             const deviceToken = getDeviceToken();
@@ -279,7 +324,8 @@
             const socket = io({
                 reconnection: true,
                 reconnectionAttempts: 10,
-                reconnectionDelay: 1000
+                reconnectionDelay: 1000,
+                timeout: 10000
             });
 
             // Элементы
@@ -303,6 +349,11 @@
 
             // Добавить сообщение
             function addMessage(msg, isOwn) {
+                // Убираем системное сообщение о загрузке если оно есть
+                if (messagesEl.children.length === 1 && messagesEl.children[0].className === 'system-message') {
+                    messagesEl.innerHTML = '';
+                }
+
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
                 messageDiv.innerHTML = `
@@ -327,16 +378,28 @@
 
             // --- Socket события ---
             socket.on('connect', () => {
+                console.log('✅ Подключено к серверу');
                 connectionStatus.style.display = 'none';
                 sendButton.disabled = false;
                 messageInput.disabled = false;
+                messageInput.placeholder = 'Введите сообщение...';
                 socket.emit('register', deviceToken);
             });
 
-            socket.on('disconnect', () => {
+            socket.on('connect_error', (error) => {
+                console.error('Ошибка подключения:', error);
                 connectionStatus.style.display = 'block';
                 sendButton.disabled = true;
                 messageInput.disabled = true;
+                messageInput.placeholder = 'Ошибка подключения...';
+            });
+
+            socket.on('disconnect', () => {
+                console.log('🔴 Отключено от сервера');
+                connectionStatus.style.display = 'block';
+                sendButton.disabled = true;
+                messageInput.disabled = true;
+                messageInput.placeholder = 'Нет соединения...';
             });
 
             socket.on('init', (data) => {
@@ -368,7 +431,7 @@
             socket.on('user typing', (data) => {
                 if (data.anonymousNumber !== myNumber) {
                     typingIndicator.textContent = data.isTyping ? 
-                        `Аноним ${data.anonymousNumber} печатает...` : '';
+                        `✏️ Аноним ${data.anonymousNumber} печатает...` : '';
                 }
             });
 
@@ -385,7 +448,7 @@
             sendButton.addEventListener('click', sendMessage);
             
             messageInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
                 }
@@ -403,7 +466,13 @@
                 }
             });
 
+            // Фокус на поле ввода
             messageInput.focus();
+
+            // Обработка ошибок
+            window.addEventListener('error', (e) => {
+                console.error('Ошибка:', e.error);
+            });
         })();
     </script>
 </body>
