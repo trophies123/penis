@@ -5,12 +5,13 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  maxHttpBufferSize: 5e6 // 5MB лимит для изображений
+});
 
-// Отдаём статические файлы из текущей папки
 app.use(express.static(__dirname));
+app.use(express.json({ limit: '5mb' }));
 
-// Для всех маршрутов отдаём index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -23,7 +24,6 @@ let nextAnonymousNumber = 1;
 io.on('connection', (socket) => {
   console.log('🔵 Новое подключение:', socket.id);
 
-  // Регистрация пользователя
   socket.on('register', (userToken) => {
     let user = users.get(userToken);
     let isNewUser = false;
@@ -50,17 +50,16 @@ io.on('connection', (socket) => {
 
     socket.emit('init', {
       anonymousNumber: user.anonymousNumber,
-      messages: messages.slice(-50)
+      messages: messages.slice(-200)
     });
 
-    // Отправляем список онлайн
     const activeUsers = Array.from(users.values())
       .filter(u => u.socketId)
       .map(u => u.anonymousNumber);
     io.emit('users online', activeUsers);
   });
 
-  // Обработка сообщений
+  // Обработка сообщений (текст + изображения)
   socket.on('chat message', (data) => {
     let sender = null;
     for (let [token, user] of users.entries()) {
@@ -75,7 +74,10 @@ io.on('connection', (socket) => {
     const messageData = {
       id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
       anonymousNumber: sender.anonymousNumber,
-      text: data.text.substring(0, 500),
+      type: data.type || 'text', // 'text' или 'image'
+      text: data.text ? data.text.substring(0, 500) : null,
+      image: data.image || null, // base64 изображение
+      replyTo: data.replyTo || null, // { id, anonymousNumber, text, type }
       timestamp: new Date().toLocaleTimeString('ru-RU', { 
         hour: '2-digit', 
         minute: '2-digit'
@@ -83,12 +85,11 @@ io.on('connection', (socket) => {
     };
 
     messages.push(messageData);
-    if (messages.length > 100) messages.shift();
+    if (messages.length > 200) messages.shift();
 
     io.emit('chat message', messageData);
   });
 
-  // Индикатор печатания
   socket.on('typing', (isTyping) => {
     let sender = null;
     for (let [token, user] of users.entries()) {
@@ -105,7 +106,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Отключение
   socket.on('disconnect', () => {
     let disconnectedUser = null;
     for (let [token, user] of users.entries()) {
@@ -120,13 +120,11 @@ io.on('connection', (socket) => {
     if (disconnectedUser) {
       console.log(`🔴 Аноним #${disconnectedUser.anonymousNumber} отключился`);
       
-      // Обновляем список онлайн
       const activeUsers = Array.from(users.values())
         .filter(u => u.socketId)
         .map(u => u.anonymousNumber);
       io.emit('users online', activeUsers);
       
-      // Удаляем неактивных через 5 минут
       setTimeout(() => {
         const user = users.get(disconnectedUser.token);
         if (user && !user.socketId) {
