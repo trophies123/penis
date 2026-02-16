@@ -5,20 +5,18 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+const io = new Server(server);
 
-// Отдаём index.html из той же папки
-app.get('/', (req, res) => {
+// Отдаём статические файлы из текущей папки
+app.use(express.static(__dirname));
+
+// Для всех маршрутов отдаём index.html
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Хранилище данных
-const users = new Map(); // token -> { anonymousNumber, socketId, lastSeen }
+const users = new Map();
 const messages = [];
 let nextAnonymousNumber = 1;
 
@@ -122,26 +120,27 @@ io.on('connection', (socket) => {
     if (disconnectedUser) {
       console.log(`🔴 Аноним #${disconnectedUser.anonymousNumber} отключился`);
       
-      // Удаляем неактивных через 5 минут
-      setTimeout(() => {
-        const user = users.get(disconnectedUser.token);
-        if (user && !user.socketId) {
-          users.delete(disconnectedUser.token);
-          io.emit('system message', {
-            text: `👋 Аноним ${disconnectedUser.anonymousNumber} покинул чат`
-          });
-          
-          const activeUsers = Array.from(users.values())
-            .filter(u => u.socketId)
-            .map(u => u.anonymousNumber);
-          io.emit('users online', activeUsers);
-        }
-      }, 5 * 60 * 1000);
-
+      // Обновляем список онлайн
       const activeUsers = Array.from(users.values())
         .filter(u => u.socketId)
         .map(u => u.anonymousNumber);
       io.emit('users online', activeUsers);
+      
+      // Удаляем неактивных через 5 минут
+      setTimeout(() => {
+        const user = users.get(disconnectedUser.token);
+        if (user && !user.socketId) {
+          users.delete(token);
+          io.emit('system message', {
+            text: `👋 Аноним ${disconnectedUser.anonymousNumber} покинул чат`
+          });
+          
+          const updatedActiveUsers = Array.from(users.values())
+            .filter(u => u.socketId)
+            .map(u => u.anonymousNumber);
+          io.emit('users online', updatedActiveUsers);
+        }
+      }, 5 * 60 * 1000);
     }
   });
 });
