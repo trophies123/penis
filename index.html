@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Анонимный чат</title>
-    <!-- Подключаем Socket.IO через CDN (надёжный способ) -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
@@ -18,6 +17,7 @@
             --secondary: #764ba2;
             --dark: #2c3e50;
             --light: #f8f9fa;
+            --reply-color: #e3f2fd;
         }
 
         body {
@@ -32,14 +32,15 @@
 
         .chat-container {
             width: 100%;
-            max-width: 800px;
-            height: 90vh;
+            max-width: 900px;
+            height: 95vh;
             background: white;
             border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            position: relative;
         }
 
         .chat-header {
@@ -104,6 +105,32 @@
             flex-direction: column;
         }
 
+        /* Стили для ответов */
+        .reply-context {
+            background: var(--reply-color);
+            border-left: 3px solid var(--primary);
+            padding: 5px 10px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #555;
+        }
+
+        .reply-sender {
+            font-weight: 600;
+            color: var(--primary);
+            margin-right: 5px;
+        }
+
+        .reply-text {
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+            display: inline-block;
+        }
+
         .message {
             max-width: 70%;
             margin-bottom: 15px;
@@ -111,6 +138,7 @@
             border-radius: 18px;
             word-wrap: break-word;
             animation: fadeIn 0.3s;
+            position: relative;
         }
 
         @keyframes fadeIn {
@@ -133,6 +161,16 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
+        .message.own .reply-context {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-left-color: white;
+        }
+
+        .message.own .reply-sender {
+            color: white;
+        }
+
         .message-header {
             display: flex;
             justify-content: space-between;
@@ -151,6 +189,13 @@
 
         .sender-name {
             font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .sender-name:hover {
+            opacity: 0.8;
+            text-decoration: underline;
         }
 
         .timestamp {
@@ -162,6 +207,77 @@
             font-size: 0.95rem;
             line-height: 1.4;
             word-break: break-word;
+        }
+
+        /* Стили для фото */
+        .chat-photo {
+            max-width: 250px;
+            max-height: 250px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 5px;
+        }
+
+        .chat-photo:hover {
+            transform: scale(1.02);
+        }
+
+        .photo-caption {
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+
+        .photo-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+
+        .photo-fullscreen img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .message-actions {
+            display: none;
+            position: absolute;
+            top: -20px;
+            right: 0;
+            background: white;
+            border-radius: 20px;
+            padding: 5px 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .message:hover .message-actions {
+            display: flex;
+        }
+
+        .reply-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 3px 10px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .reply-button:hover {
+            opacity: 0.9;
         }
 
         .system-message {
@@ -185,10 +301,81 @@
             background: white;
         }
 
+        .reply-preview {
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-left: 3px solid var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .reply-preview-text {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 10px;
+        }
+
+        .cancel-reply {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0 5px;
+        }
+
+        .cancel-reply:hover {
+            color: #ff4444;
+        }
+
         .input-area {
             background: white;
             padding: 15px;
             border-top: 1px solid #e0e0e0;
+        }
+
+        .input-tools {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .photo-upload {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .photo-upload-button {
+            background: #f0f0f0;
+            color: #666;
+            border: none;
+            border-radius: 25px;
+            padding: 8px 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .photo-upload-button:hover {
+            background: #e0e0e0;
+        }
+
+        .photo-upload input {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .message-input-wrapper {
             display: flex;
             gap: 10px;
         }
@@ -264,6 +451,10 @@
             #sendButton {
                 padding: 12px 20px;
             }
+            .photo-upload-button {
+                padding: 8px 15px;
+                font-size: 0.8rem;
+            }
         }
     </style>
 </head>
@@ -290,8 +481,22 @@
         <div id="typingIndicator" class="typing-indicator"></div>
         
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off" maxlength="500">
-            <button id="sendButton">➤</button>
+            <div id="replyPreview" class="reply-preview" style="display: none;">
+                <span class="reply-preview-text" id="replyPreviewText">Ответ на сообщение</span>
+                <button class="cancel-reply" id="cancelReplyBtn">✕</button>
+            </div>
+            
+            <div class="input-tools">
+                <div class="photo-upload">
+                    <button class="photo-upload-button" id="photoUploadBtn">📷 Фото</button>
+                    <input type="file" id="photoInput" accept="image/*" capture="environment">
+                </div>
+            </div>
+            
+            <div class="message-input-wrapper">
+                <input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off" maxlength="1000">
+                <button id="sendButton">➤</button>
+            </div>
         </div>
     </div>
 
@@ -299,7 +504,7 @@
         (function() {
             // Проверка загрузки Socket.IO
             if (typeof io === 'undefined') {
-                document.getElementById('messages').innerHTML = '<div class="system-message" style="color: red;">❌ Ошибка: не удалось загрузить Socket.IO. Проверьте подключение к интернету.</div>';
+                document.getElementById('messages').innerHTML = '<div class="system-message" style="color: red;">❌ Ошибка: не удалось загрузить Socket.IO. Обновите страницу.</div>';
                 return;
             }
 
@@ -313,7 +518,6 @@
                     }
                     return token;
                 } catch (e) {
-                    // Если localStorage недоступен
                     return 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
                 }
             }
@@ -325,7 +529,7 @@
                 reconnection: true,
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
-                timeout: 10000
+                timeout: 20000
             });
 
             // Элементы
@@ -336,9 +540,15 @@
             const sendButton = document.getElementById('sendButton');
             const connectionStatus = document.getElementById('connectionStatus');
             const typingIndicator = document.getElementById('typingIndicator');
+            const photoInput = document.getElementById('photoInput');
+            const replyPreview = document.getElementById('replyPreview');
+            const replyPreviewText = document.getElementById('replyPreviewText');
+            const cancelReplyBtn = document.getElementById('cancelReplyBtn');
 
             let myNumber = null;
             let typingTimer;
+            let replyingTo = null; // Сообщение, на которое отвечаем
+            let messagesMap = new Map(); // Для быстрого поиска сообщений по ID
 
             // Экранирование HTML
             function escapeHtml(text) {
@@ -347,25 +557,96 @@
                 return div.innerHTML;
             }
 
+            // Показать фото на весь экран
+            function showFullscreenPhoto(src) {
+                const fullscreenDiv = document.createElement('div');
+                fullscreenDiv.className = 'photo-fullscreen';
+                fullscreenDiv.onclick = () => fullscreenDiv.remove();
+                
+                const img = document.createElement('img');
+                img.src = src;
+                
+                fullscreenDiv.appendChild(img);
+                document.body.appendChild(fullscreenDiv);
+            }
+
             // Добавить сообщение
             function addMessage(msg, isOwn) {
-                // Убираем системное сообщение о загрузке если оно есть
                 if (messagesEl.children.length === 1 && messagesEl.children[0].className === 'system-message') {
                     messagesEl.innerHTML = '';
                 }
 
+                // Сохраняем в Map для поиска при ответах
+                messagesMap.set(msg.id, msg);
+
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+                messageDiv.dataset.messageId = msg.id;
+
+                // Добавляем информацию об ответе, если есть
+                let replyHtml = '';
+                if (msg.replyTo) {
+                    const repliedMsg = messagesMap.get(msg.replyTo) || msg.replyTo;
+                    if (repliedMsg && typeof repliedMsg === 'object') {
+                        replyHtml = `
+                            <div class="reply-context">
+                                <span class="reply-sender">Аноним ${repliedMsg.anonymousNumber}</span>
+                                <span class="reply-text">${escapeHtml(repliedMsg.text || (repliedMsg.type === 'photo' ? '📷 Фото' : ''))}</span>
+                            </div>
+                        `;
+                    } else if (typeof msg.replyTo === 'object') {
+                        replyHtml = `
+                            <div class="reply-context">
+                                <span class="reply-sender">Аноним ${msg.replyTo.anonymousNumber}</span>
+                                <span class="reply-text">${escapeHtml(msg.replyTo.text || (msg.replyTo.type === 'photo' ? '📷 Фото' : ''))}</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                let contentHtml = '';
+                if (msg.type === 'photo') {
+                    contentHtml = `
+                        <img src="${msg.photo}" class="chat-photo" onclick="showFullscreenPhoto('${msg.photo}')">
+                        ${msg.caption ? `<div class="photo-caption">${escapeHtml(msg.caption)}</div>` : ''}
+                    `;
+                } else {
+                    contentHtml = `<div class="message-text">${escapeHtml(msg.text)}</div>`;
+                }
+
                 messageDiv.innerHTML = `
                     <div class="message-header">
-                        <span class="sender-name">Аноним ${msg.anonymousNumber}</span>
+                        <span class="sender-name" onclick="replyToMessage('${msg.id}')">Аноним ${msg.anonymousNumber}</span>
                         <span class="timestamp">${msg.timestamp}</span>
                     </div>
-                    <div class="message-text">${escapeHtml(msg.text)}</div>
+                    ${replyHtml}
+                    ${contentHtml}
+                    <div class="message-actions">
+                        <button class="reply-button" onclick="replyToMessage('${msg.id}')">Ответить</button>
+                    </div>
                 `;
+
                 messagesEl.appendChild(messageDiv);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
+
+            // Глобальная функция для ответа на сообщение
+            window.replyToMessage = (messageId) => {
+                const msg = messagesMap.get(messageId);
+                if (msg) {
+                    replyingTo = msg;
+                    const previewText = msg.text || (msg.type === 'photo' ? '📷 Фото' : '');
+                    replyPreviewText.textContent = `Ответ Аноним ${msg.anonymousNumber}: ${previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}`;
+                    replyPreview.style.display = 'flex';
+                    messageInput.focus();
+                }
+            };
+
+            // Отмена ответа
+            cancelReplyBtn.addEventListener('click', () => {
+                replyingTo = null;
+                replyPreview.style.display = 'none';
+            });
 
             // Добавить системное сообщение
             function addSystemMessage(text) {
@@ -375,6 +656,44 @@
                 messagesEl.appendChild(systemDiv);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
+
+            // Отправка фото
+            photoInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Проверка размера (макс 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    addSystemMessage('❌ Фото слишком большое (макс 5MB)');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64Photo = event.target.result;
+                    
+                    // Спрашиваем подпись
+                    const caption = prompt('Добавить подпись к фото (необязательно):', '');
+                    
+                    socket.emit('chat photo', {
+                        photo: base64Photo,
+                        caption: caption || '',
+                        replyTo: replyingTo ? {
+                            id: replyingTo.id,
+                            anonymousNumber: replyingTo.anonymousNumber,
+                            text: replyingTo.text || (replyingTo.type === 'photo' ? '📷 Фото' : '')
+                        } : null
+                    });
+
+                    // Сбрасываем ответ
+                    replyingTo = null;
+                    replyPreview.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+
+                // Сбрасываем input чтобы можно было загрузить то же фото снова
+                photoInput.value = '';
+            });
 
             // --- Socket события ---
             socket.on('connect', () => {
@@ -387,15 +706,15 @@
             });
 
             socket.on('connect_error', (error) => {
-                console.error('Ошибка подключения:', error);
+                console.error('❌ Ошибка подключения:', error.message);
                 connectionStatus.style.display = 'block';
                 sendButton.disabled = true;
                 messageInput.disabled = true;
                 messageInput.placeholder = 'Ошибка подключения...';
             });
 
-            socket.on('disconnect', () => {
-                console.log('🔴 Отключено от сервера');
+            socket.on('disconnect', (reason) => {
+                console.log('🔴 Отключено от сервера:', reason);
                 connectionStatus.style.display = 'block';
                 sendButton.disabled = true;
                 messageInput.disabled = true;
@@ -407,6 +726,8 @@
                 userBadge.textContent = `Вы: Аноним ${myNumber}`;
                 
                 messagesEl.innerHTML = '';
+                messagesMap.clear();
+                
                 if (data.messages && data.messages.length > 0) {
                     data.messages.forEach(msg => {
                         addMessage(msg, msg.anonymousNumber === myNumber);
@@ -439,9 +760,20 @@
             function sendMessage() {
                 const text = messageInput.value.trim();
                 if (text && socket.connected) {
-                    socket.emit('chat message', { text });
+                    socket.emit('chat message', { 
+                        text: text,
+                        replyTo: replyingTo ? {
+                            id: replyingTo.id,
+                            anonymousNumber: replyingTo.anonymousNumber,
+                            text: replyingTo.text || (replyingTo.type === 'photo' ? '📷 Фото' : '')
+                        } : null
+                    });
                     messageInput.value = '';
                     socket.emit('typing', false);
+                    
+                    // Сбрасываем ответ
+                    replyingTo = null;
+                    replyPreview.style.display = 'none';
                 }
             }
 
@@ -466,13 +798,7 @@
                 }
             });
 
-            // Фокус на поле ввода
             messageInput.focus();
-
-            // Обработка ошибок
-            window.addEventListener('error', (e) => {
-                console.error('Ошибка:', e.error);
-            });
         })();
     </script>
 </body>
