@@ -5,14 +5,9 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+const io = new Server(server);
 
-// Отдаём статические файлы
+// Отдаём статические файлы из текущей папки
 app.use(express.static(__dirname));
 
 // Для всех маршрутов отдаём index.html
@@ -21,8 +16,8 @@ app.get('*', (req, res) => {
 });
 
 // Хранилище данных
-const users = new Map(); // token -> { anonymousNumber, socketId, lastSeen }
-const messages = []; // История сообщений с поддержкой ответов
+const users = new Map();
+const messages = [];
 let nextAnonymousNumber = 1;
 
 io.on('connection', (socket) => {
@@ -55,7 +50,7 @@ io.on('connection', (socket) => {
 
     socket.emit('init', {
       anonymousNumber: user.anonymousNumber,
-      messages: messages.slice(-100) // Последние 100 сообщений
+      messages: messages.slice(-50)
     });
 
     // Отправляем список онлайн
@@ -65,7 +60,7 @@ io.on('connection', (socket) => {
     io.emit('users online', activeUsers);
   });
 
-  // Обработка текстовых сообщений с поддержкой ответов
+  // Обработка сообщений
   socket.on('chat message', (data) => {
     let sender = null;
     for (let [token, user] of users.entries()) {
@@ -79,51 +74,18 @@ io.on('connection', (socket) => {
 
     const messageData = {
       id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-      type: 'text',
       anonymousNumber: sender.anonymousNumber,
-      text: data.text.substring(0, 1000),
+      text: data.text.substring(0, 500),
       timestamp: new Date().toLocaleTimeString('ru-RU', { 
         hour: '2-digit', 
         minute: '2-digit'
-      }),
-      replyTo: data.replyTo || null // Добавляем информацию об ответе
+      })
     };
 
     messages.push(messageData);
-    if (messages.length > 200) messages.shift(); // Храним больше сообщений
+    if (messages.length > 100) messages.shift();
 
     io.emit('chat message', messageData);
-  });
-
-  // Обработка фотографий
-  socket.on('chat photo', (data) => {
-    let sender = null;
-    for (let [token, user] of users.entries()) {
-      if (user.socketId === socket.id) {
-        sender = user;
-        break;
-      }
-    }
-
-    if (!sender) return;
-
-    const photoData = {
-      id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-      type: 'photo',
-      anonymousNumber: sender.anonymousNumber,
-      photo: data.photo, // base64 изображение
-      caption: data.caption ? data.caption.substring(0, 200) : '',
-      timestamp: new Date().toLocaleTimeString('ru-RU', { 
-        hour: '2-digit', 
-        minute: '2-digit'
-      }),
-      replyTo: data.replyTo || null
-    };
-
-    messages.push(photoData);
-    if (messages.length > 200) messages.shift();
-
-    io.emit('chat message', photoData);
   });
 
   // Индикатор печатания
@@ -166,24 +128,12 @@ io.on('connection', (socket) => {
       
       // Удаляем неактивных через 5 минут
       setTimeout(() => {
-        let userStillExists = false;
-        for (let [token, user] of users.entries()) {
-          if (user.anonymousNumber === disconnectedUser.anonymousNumber && user.socketId) {
-            userStillExists = true;
-            break;
-          }
-        }
-        
-        if (!userStillExists) {
-          for (let [token, user] of users.entries()) {
-            if (user.anonymousNumber === disconnectedUser.anonymousNumber) {
-              users.delete(token);
-              io.emit('system message', {
-                text: `👋 Аноним ${disconnectedUser.anonymousNumber} покинул чат`
-              });
-              break;
-            }
-          }
+        const user = users.get(disconnectedUser.token);
+        if (user && !user.socketId) {
+          users.delete(token);
+          io.emit('system message', {
+            text: `👋 Аноним ${disconnectedUser.anonymousNumber} покинул чат`
+          });
           
           const updatedActiveUsers = Array.from(users.values())
             .filter(u => u.socketId)
