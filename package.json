@@ -1,7 +1,7 @@
 {
   "name": "anon-chat",
   "version": "1.0.0",
-  "description": "Публичный анонимный чат",
+  "description": "Публичный анонимный чат с картинками",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
